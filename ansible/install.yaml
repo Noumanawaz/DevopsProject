@@ -1,0 +1,25 @@
+- name: Set up Kubernetes environment on macOS
+  hosts: local
+  connection: local
+  gather_facts: no
+
+  tasks:
+    - name: Start Minikube
+      shell: minikube start --driver=docker
+
+    - name: Get Minikube Docker environment variables
+      shell: minikube docker-env --shell bash
+      register: minikube_env
+
+    - name: Parse Docker environment variables from minikube
+      set_fact:
+        docker_env_vars: "{{ docker_env_vars | default({}) | combine({ item.split('=')[0]: item.split('=')[1] }) }}"
+      loop: "{{ minikube_env.stdout_lines | select('match', '^export ') | list }}"
+      when: item.split('=')[1] is defined
+
+    - name: Build Docker image inside Minikube
+      shell: docker build -t simple-express-app:latest ../
+      environment: "{{ docker_env_vars }}"
+
+    - name: Apply Kubernetes manifests
+      shell: kubectl apply -f ../k8s/
